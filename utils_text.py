@@ -1,15 +1,17 @@
-#file di utilità per trovare le parole e pulire il testo
+# file di utilità per trovare le parole e pulire il testo
 
 import re
 import config
 
+
 def is_phrase_in(phrase, text):
     return re.search(r"\b{}\b".format(phrase), text, re.IGNORECASE) is not None
+
 
 def clean_text(soup):
     # kill all script and style elements
     for script in soup(["script", "style"]):
-        script.extract()    # rip it out
+        script.extract()  # rip it out
 
     # get text
     text = soup.get_text()
@@ -23,19 +25,20 @@ def clean_text(soup):
 
     return text.lower()
 
+
 def find_word(html_clean):
     score = 0
     words_list = ""
-                
-    #per ogni parola calcolo il numero di occorrenze nella pagina html
 
-    for word in config.keywords :
-        if  is_phrase_in(word, html_clean):
+    # For each word calculate the number of occurrences in the html page pagina html
+
+    for word in config.keywords:
+        if is_phrase_in(word, html_clean):
             words_list += word + ", "
             score += 1
 
     words_list = words_list[:-2]
 
-    score = score/len(config.keywords)
+    score = score / len(config.keywords)
 
-    return words_list,score
+    return words_list, score

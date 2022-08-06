@@ -6,160 +6,163 @@
 @Time: 2022/05/29 02:37 PM
 """
 
-# Script python che permette di fare webscraping dato un dataset contenente degli URL
-# trovando un set di parole nella pagina web. 
-# Vengono salvati in un dataset apposito i risultati della ricerca
+# Python script that allows webscraping given a dataset containing URLs
+# by finding a set of words in the web page.
+# The results of the search are saved in a dedicated dataset.
 
-# il file di configurazione dei dataset è 'config.py' 
+# The configuration file is 'config.py'
 
 from bs4 import BeautifulSoup
-import csv  
+import csv
 import requests
 from urllib.parse import urlparse
 from urllib.parse import urlsplit
 import validators
 import time
 import re
-
-#import config and utils_text file
-
 import config
 import utils_text
 
-n_url_non_inseriti = 0          #contatore del numero di elementi che non hanno inserito link
-n_url_errati = 0                #contatore del numero di elementi che hanno inserito il link sbagliato o mal scritto
-n_url_validi = 0                #contatore del numero di elementi che hanno inserito il link correttamente
-n_elementi = 0                  #contatore del numero di elementi totale
-matching_keyword = 0            #contatore del numero di elementi che avevano almeno una parola dell'elenco keywords
-                                #nel loro sito web
 
-#messaggi informativi
+# method for building URL
 
-print('\nFile di configurazione: config.py')
+def build_link(url, domain_url):
+    link_to_build = ""
+    u = urlparse(url)
 
-print('\nPATH DATASET DI TEST: ', config.dataset_input_path)
-print('PATH DATASET DI SALVATAGGIO: ', config.dataset_output_path)
-
-time.sleep(5)
-
-print('\nINIZIO ANALISI .... \n')
-
-#metodo che permette di costruire l'URL
-
-def build_link(link,dominio):
-    u = urlparse(link)
-    link = ""
-                
     if u.scheme == "":
-        link += "http://"
-                
-    link = link + dominio
-    link = link.replace("https","http").strip()
-    link = re.sub(r"\s+","",link)
-    link = link.replace("\\","")
+        link_to_build += "http://"
 
-    if link[len(link)-1] == ".":
-        link = link[:-1]
-    return link
+    link_to_build = link_to_build + domain_url
+    link_to_build = link_to_build.replace("https", "http").strip()
+    link_to_build = re.sub(r"\s+", "", link_to_build)
+    link_to_build = link_to_build.replace("\\", "")
 
-#scorrimento del dataset
+    if link_to_build[len(link_to_build) - 1] == ".":
+        link_to_build = link_to_build[:-1]
+    return link_to_build
 
-with open(config.dataset_output_path, 'w', encoding=config.dataset_input_encoding, newline='') as f:
-    
-    writer = csv.writer(f, delimiter=config.dataset_output_separator)
 
-    writer.writerow(config.header)
+n_url_not_inserted = 0  # Counter of the number of rows which have no link.
+n_url_wrong = 0  # Counter of the number of rows which have wrong or bad formatted link.
+n_url_valid = 0  # Counter of the number of rows which have a valid link.
+n_items = 0  # Counter of the number of rows.
+matching_keyword = 0  # Counter of the number of websites which have at least one word from the keywords list.
 
-    with open(config.dataset_input_path,'r', newline='',encoding=config.dataset_output_encoding,errors='ignore') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=config.dataset_input_separator)
-        line_count = 0
-        for row in csv_reader:
-            line_count += 1
-            if line_count == 1:
-                continue
-            else:
-                n_elementi+=1
-                print("parsing element "+ str(line_count-1)) 
+# Informative messages
 
-                nome = row[config.pos_NOME]             #prelevo il campo del nome
-                link = row[config.pos_URL]              #prelevo l'URL del sito web
-                id = row[config.pos_ID]                 #prelevo l'id
+print('\nConfiguration file: config.py')
+print('\nPATH TEST DATASET: ', config.dataset_input_path)
+print('PATH DATASET SAVING: ', config.dataset_output_path)
 
-                #in caso l'url non fosse valido inserirà questa row
+time.sleep(config.SLEEP_TIME)
 
-                data_error = [nome,link,id,'NO','NO','0','0'] 
+print('\nSTARTING ANALYSIS.... \n')
 
-                #ANALISI E COSTRUZIONE DEL LINK
-                
-                r1 = urlsplit(link)
-                dominio = r1.geturl()
-                
-                if dominio == "":
-                    #url mancante
-                    n_url_non_inseriti+=1
-                    writer.writerow(data_error)
+# parsing input dataset
+try:
+    with open(config.dataset_output_path, 'w', encoding=config.dataset_input_encoding, newline='') as f:
+        writer = csv.writer(f, delimiter=config.dataset_output_separator)
+        writer.writerow(config.header)
+
+        with open(config.dataset_input_path, 'r', newline='', encoding=config.dataset_output_encoding,
+                  errors='ignore') as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=config.dataset_input_separator)
+            line_count = 0
+            for row in csv_reader:
+                line_count += 1
+                if line_count == 1:
                     continue
-                
-                link = build_link(link,dominio)
-                
-                if not validators.url(link):
-                    #url non valido
-                    n_url_errati+=1
-                    writer.writerow(data_error)
-                    continue
-                
-                #scarico pagina web
-                
-                try:
-                    r = requests.get(link, allow_redirects=True,headers=config.headers)
-                except:
-                    #errore nello scaricamento della pagina
-                    n_url_errati += 1
-                    writer.writerow(data_error)
-                    print("error")
-                    continue
-                
-                #ARRIVATO QUI SIGNIFICA CHE IL LINK E' VALIDO!!
-                
-                n_url_validi += 1
+                else:
+                    n_items += 1
+                    print("parsing element " + str(line_count - 1))
 
-                #estraggo solo il testo dalla pagina html pulito e in lower case
+                    name = row[config.pos_NAME]  # get name field
+                    link = row[config.pos_URL]  # get website URL field
+                    id_row = row[config.pos_ID]  # get id field
 
-                soup = BeautifulSoup(r.content, features="html.parser")
-                html_clean =  utils_text.clean_text(soup)
+                    # ROW INSERTED IF URL IS NOT VALID
 
-                #trovo parole
-                (words_list,score) = utils_text.find_word(html_clean)
+                    data_error = [name, link, id_row, 'NO', 'NO', '0', '0']
 
-                #print dei risultati man mano che si scorrono gli elementi
-                print(nome,score)                    
+                    # Analysis and building URL
 
-                #salvo i dati nel file csv
-                # data_OK è la row che scrive in caso di successo
-                                
-                if score>0 : 
-                    #MATCHING
-                    matching_keyword+=1
-                    data_OK = [nome,link,id,'YES','YES',score,words_list]
-                else:  
-                    #URL VALIDO MA NON C'E' STATO MATCHING
-                    data_OK = [nome,link,id,'YES','NO',0,0]
-                
-                writer.writerow(data_OK)
+                    r1 = urlsplit(link)
+                    domain = r1.geturl()
 
-                #aspetto 5 secondi
-                time.sleep(5)
+                    if domain == "":
+                        # missing url
+                        n_url_not_inserted += 1
+                        writer.writerow(data_error)
+                        continue
 
-#ANALISI LINK
+                    link = build_link(link, domain)
 
-print("\nANALISI DEI LINK:\n")
-print("TOTALE: ",n_elementi)
-print("LINK VALIDI: ",n_url_validi,'-',(n_url_validi/n_elementi)*100,"%")
-print("LINK NON INSERITI: ",n_url_non_inseriti,'-',(n_url_non_inseriti/n_elementi)*100,"%")
-print("LINK INSERITI NON VALIDI: ",n_url_errati,'-',(n_url_errati/n_elementi)*100,"%")
+                    if not validators.url(link):
+                        # not valid URL
+                        n_url_wrong += 1
+                        writer.writerow(data_error)
+                        continue
 
-#ANALISI RISULTATI
+                    # Webpage download
 
-print("\nANALISI DEI RISULTATI:\n")
-print("TOTALE ELEMENTI VALUTATI: ",n_url_validi)
-print("ELEMENTI CHE HANNO AVUTO ALMENO UN MATCH: ",matching_keyword,'-',(matching_keyword/n_url_validi)*100,"%")
+                    try:
+                        r = requests.get(link, allow_redirects=True, headers=config.headers)
+                    except:
+                        # Error during webpage downloading
+                        n_url_wrong += 1
+                        writer.writerow(data_error)
+                        print("Can't download webpage")
+                        continue
+
+                    # The link is valid here!
+
+                    n_url_valid += 1
+
+                    # Get only text from HTML, cleaning and lowercase
+
+                    soup = BeautifulSoup(r.content, features="html.parser")
+                    html_clean = utils_text.clean_text(soup)
+
+                    # Find words
+                    (words_list, score) = utils_text.find_word(html_clean)
+
+                    # Intermediate results printing
+                    print(name, score)
+
+                    # saving data in CSV file
+                    # data_OK is the row that writes on success
+
+                    if score > 0:
+                        # MATCHING
+                        matching_keyword += 1
+                        data_OK = [name, link, id_row, 'YES', 'YES', score, words_list]
+                    else:
+                        # URL VALID BUT NO MATCHING
+                        data_OK = [name, link, id_row, 'YES', 'NO', 0, 0]
+
+                    writer.writerow(data_OK)
+
+                    # Wait 5 seconds
+                    time.sleep(config.SLEEP_TIME)
+except FileNotFoundError:
+    print("ERROR: Input dataset not found! Please check 'config.py' file")
+    exit()
+
+if n_items == 0 or n_url_valid == 0:
+    print("\nError: EMPTY LIST OR NO VALID URL")
+    exit()
+
+# LINK ANALYSIS
+
+print("\nLINK ANALYSIS:\n")
+print("TOTAL ITEMS: ", n_items)
+print("VALID LINKS: ", n_url_valid, '-', (n_url_valid / n_items) * 100, "%")
+print("NOT INSERTED LINKS: ", n_url_not_inserted, '-', (n_url_not_inserted / n_items) * 100, "%")
+print("NOT VALID LINKS: ", n_url_wrong, '-', (n_url_wrong / n_items) * 100, "%")
+
+# RESULTS ANALYSIS
+
+print("\nRESULTS ANALYSIS:\n")
+print("TOTAL EVALUATED ITEMS: ", n_url_valid)
+print("ELEMENTS THAT HAD AT LEAST ONE MATCH: ", matching_keyword, '-', (matching_keyword / n_url_valid) * 100, "%")
